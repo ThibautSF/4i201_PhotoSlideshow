@@ -8,12 +8,14 @@ Author : SIMON-FINE & DE RYCKE
 
 import photo
 import math
+import random
+import collections
 
 
 # Photos dicts : key,value → photoID,Photo
-allPhotos = {}
-hPhotos = {}
-vPhotos = {}
+allPhotos = collections.OrderedDict()
+hPhotos = collections.OrderedDict()
+vPhotos = collections.OrderedDict()
 
 
 def read_instance_file(filename, percent=100):
@@ -106,15 +108,91 @@ def score_transition(slide_a, slide_b):
     return score
 
 
+def glouton_slide_show():
+    slide_show = []  # list of lists (one element if H / two elements if V)
+    loc_h_photos = hPhotos.copy()
+    loc_v_photos = vPhotos.copy()
+
+    # Begin init slideshow
+    a_photo_id, a_photo = random.choice(list(allPhotos.items()))
+
+    first_slide = list()
+    first_slide.append(a_photo_id)
+
+    if a_photo.orient == "H":
+        loc_h_photos.pop(a_photo_id)
+    elif a_photo.orient == 'V':
+        loc_v_photos.pop(a_photo_id)
+        b_photo_id = random.choice(list(loc_v_photos.keys()))
+        first_slide.append(b_photo_id)
+        loc_v_photos.pop(b_photo_id)
+
+    slide_show.append(first_slide)
+    # End init slideshow
+
+    while len(loc_h_photos)>0 or len(loc_v_photos)>1:
+        slide_show, loc_h_photos, loc_v_photos = glouton_add_slide(slide_show, loc_h_photos, loc_v_photos)
+
+    return slide_show
+
+
+def glouton_add_slide(slide_show, h_photos, v_photos):
+    best_transition = list()
+    score = -1
+
+    # Check H photos
+    for h_photo_id in h_photos:
+        score_t = score_transition(slide_show[-1],[h_photo_id])
+        if score_t > score:
+            score = score_t
+            best_transition = [h_photo_id]
+
+    # Check V photos
+    lst_v_keys = list(v_photos.keys())
+    i=0
+    while i < len(lst_v_keys)-1:
+        j = i+1
+        while j < len(lst_v_keys):
+            score_t = score_transition(slide_show[-1], [lst_v_keys[i],lst_v_keys[j]])
+            if score_t > score:
+                score = score_t
+                best_transition = [lst_v_keys[i],lst_v_keys[j]]
+            j += 1
+        i += 1
+
+    slide_show.append(best_transition)
+
+    # Remove choosed photo from choice
+    if len(best_transition) == 1:
+        h_photos.pop(best_transition[0])
+    else:
+        v_photos.pop(best_transition[0])
+        v_photos.pop(best_transition[1])
+
+    return slide_show, h_photos, v_photos
+
+
 if __name__ == '__main__':
-    read_instance_file("ressources/a_example.txt",100)
-    print(allPhotos)
-    print(hPhotos)
-    print(vPhotos)
+    debug = True
+
+    #read_instance_file("ressources/a_example.txt",100)
+    read_instance_file("ressources/b_lovely_landscapes.txt", 2)
+
+    if debug:
+        print('Datas :')
+        print(allPhotos)
+        print(hPhotos)
+        print(vPhotos)
+        print('')
 
     simple_ss = simple_slide_show()
-    print(simple_ss)
-
     write_slide_show(simple_ss)
+    print(simple_ss)
+    print('Score simple : ' + str(calc_score(simple_ss)))
 
-    print(calc_score(simple_ss))
+    print()
+
+    glouton_ss = glouton_slide_show()
+    write_slide_show(glouton_ss,"output_glouton.txt")
+    print(glouton_ss)
+    print('Score glouton : ' + str(calc_score(glouton_ss)))
