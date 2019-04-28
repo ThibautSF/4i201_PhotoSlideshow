@@ -82,20 +82,26 @@ def calc_score(slide_show):
     score = 0
     i = 0
     while i < len(slide_show)-1:
-        pos_slide = slide_show[i]
-        next_slide = slide_show[i+1]
-
-        pos_slide_words = set()
-        for photo_id in pos_slide:
-            pos_slide_words |= allPhotos[photo_id].keyWords
-
-        next_slide_words = set()
-        for photo_id in next_slide:
-            next_slide_words |= allPhotos[photo_id].keyWords
-
-        score += min(len(pos_slide_words & next_slide_words), len(pos_slide_words - next_slide_words), len(next_slide_words - pos_slide_words))
+        score += score_transition(slide_show[i], slide_show[i+1])
 
         i += 1
+
+    return score
+
+
+def score_transition(slide_a, slide_b):
+    score = 0
+
+    a_words = set()
+    for photo_id in slide_a:
+        a_words |= allPhotos[photo_id].keyWords
+
+    b_words = set()
+    for photo_id in slide_b:
+        b_words |= allPhotos[photo_id].keyWords
+
+    score += min(len(a_words & b_words), len(a_words - b_words),
+                 len(b_words - a_words))
 
     return score
 
