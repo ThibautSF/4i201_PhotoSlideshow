@@ -10,7 +10,7 @@ import photo
 import math
 import random
 import collections
-
+import copy
 
 # Photos dicts : key,value → photoID,Photo
 allPhotos = collections.OrderedDict()
@@ -172,6 +172,34 @@ def glouton_add_slide(slide_show, h_photos, v_photos):
     return slide_show, h_photos, v_photos
 
 
+def descente_stochastique(slide_show,taille):
+
+    for i in range(taille):
+        slide_show_res = copy.deepcopy(slide_show)
+        index1 = random.randint(0,len(slide_show)-1)
+        first_image = slide_show[index1]
+        if allPhotos[first_image[0]].orient == 'V':
+            index2 = random.randint(0,len(slide_show)-1)
+            second_image = slide_show[index2]
+            while allPhotos[second_image[0]].orient != 'V':
+                index2 = random.randint(0, len(slide_show)-1)
+                second_image = slide_show[index2]
+            first = random.randint(0,1)
+            second = random.randint(0,1)
+            slide_show_res[index1][first] = second_image[second]
+            slide_show_res[index2][second] = first_image[first]
+        else:
+            index2 = random.randint(0, len(slide_show)-1)
+            second_image = slide_show[index2]
+            while allPhotos[second_image[0]].orient != 'H':
+                index2 = random.randint(0, len(slide_show)-1)
+                second_image = slide_show[index2]
+            slide_show_res[index1][0] = second_image[0]
+            slide_show_res[index2][0] = first_image[0]
+        if calc_score(slide_show) < calc_score(slide_show_res):
+            slide_show = copy.deepcopy(slide_show_res)
+    return slide_show
+
 if __name__ == '__main__':
     debug = True
 
@@ -196,3 +224,5 @@ if __name__ == '__main__':
     write_slide_show(glouton_ss,"output_glouton.txt")
     print(glouton_ss)
     print('Score glouton : ' + str(calc_score(glouton_ss)))
+    new_ss = descente_stochastique(glouton_ss,10000)
+    print("Score Stochastique : " + str(calc_score(new_ss)) + "\nListe Stochastique" + str(new_ss))
