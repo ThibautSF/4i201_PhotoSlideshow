@@ -11,6 +11,7 @@ import math
 import random
 import collections
 import copy
+import time
 
 # Photos dicts : key,value → photoID,Photo
 allPhotos = collections.OrderedDict()
@@ -108,7 +109,7 @@ def score_transition(slide_a, slide_b):
     return score
 
 
-def glouton_slide_show():
+def glouton_slide_show(isfast=True):
     slide_show = []  # list of lists (one element if H / two elements if V)
     loc_h_photos = hPhotos.copy()
     loc_v_photos = vPhotos.copy()
@@ -131,7 +132,10 @@ def glouton_slide_show():
     # End init slideshow
 
     while len(loc_h_photos)>0 or len(loc_v_photos)>1:
-        slide_show, loc_h_photos, loc_v_photos = glouton_add_slide(slide_show, loc_h_photos, loc_v_photos)
+        if not isfast:
+            slide_show, loc_h_photos, loc_v_photos = glouton_add_slide(slide_show, loc_h_photos, loc_v_photos)
+        else:
+            slide_show, loc_h_photos, loc_v_photos = glouton_addfast_slide(slide_show, loc_h_photos, loc_v_photos)
 
     return slide_show
 
@@ -165,15 +169,55 @@ def glouton_add_slide(slide_show, h_photos, v_photos):
     # Remove choosed photo from choice
     if len(best_transition) == 1:
         h_photos.pop(best_transition[0])
-    else:
+    elif len(best_transition) == 2:
         v_photos.pop(best_transition[0])
         v_photos.pop(best_transition[1])
 
     return slide_show, h_photos, v_photos
 
 
-def descente_stochastique(slide_show,taille):
+def glouton_addfast_slide(slide_show, h_photos, v_photos):
+    best_transition = list()
+    score = -1
 
+    # Check H photos
+    for h_photo_id in h_photos:
+        score_t = score_transition(slide_show[-1],[h_photo_id])
+        if score_t > score:
+            score = score_t
+            best_transition = [h_photo_id]
+            if score > 0:
+                break
+
+    # Check V photos
+    lst_v_keys = list(v_photos.keys())
+    brk = False
+    i = 0
+    while i < len(lst_v_keys)-1 and not brk:
+        j = i+1
+        while j < len(lst_v_keys) and not brk:
+            score_t = score_transition(slide_show[-1], [lst_v_keys[i],lst_v_keys[j]])
+            if score_t > score:
+                score = score_t
+                best_transition = [lst_v_keys[i],lst_v_keys[j]]
+                if score > 0:
+                    brk = True
+            j += 1
+        i += 1
+
+    slide_show.append(best_transition)
+
+    # Remove choosed photo from choice
+    if len(best_transition) == 1:
+        h_photos.pop(best_transition[0])
+    elif len(best_transition) == 2:
+        v_photos.pop(best_transition[0])
+        v_photos.pop(best_transition[1])
+
+    return slide_show, h_photos, v_photos
+
+
+def descente_stochastique(slide_show, taille):
     for i in range(taille):
         slide_show_res = copy.deepcopy(slide_show)
         index1 = random.randint(0,len(slide_show)-1)
@@ -194,17 +238,22 @@ def descente_stochastique(slide_show,taille):
             while allPhotos[second_image[0]].orient != 'H':
                 index2 = random.randint(0, len(slide_show)-1)
                 second_image = slide_show[index2]
+
             slide_show_res[index1][0] = second_image[0]
             slide_show_res[index2][0] = first_image[0]
+
         if calc_score(slide_show) < calc_score(slide_show_res):
             slide_show = copy.deepcopy(slide_show_res)
+
     return slide_show
+
 
 if __name__ == '__main__':
     debug = True
 
     #read_instance_file("ressources/a_example.txt",100)
-    read_instance_file("ressources/b_lovely_landscapes.txt", 2)
+    #read_instance_file("ressources/b_lovely_landscapes.txt", 1)
+    read_instance_file("ressources/c_memorable_moments.txt", 100)
 
     if debug:
         print('Datas :')
@@ -220,9 +269,21 @@ if __name__ == '__main__':
 
     print()
 
-    glouton_ss = glouton_slide_show()
-    write_slide_show(glouton_ss,"output_glouton.txt")
+    '''
+    t1 = time.clock()
+    glouton_ss = glouton_slide_show(False)
+    t2 = time.clock()
+    write_slide_show(glouton_ss, "output_glouton.txt")
     print(glouton_ss)
-    print('Score glouton : ' + str(calc_score(glouton_ss)))
-    new_ss = descente_stochastique(glouton_ss,100)
+    print('Score glouton : ' + str(calc_score(glouton_ss)) + " en " + str(t2-t1) + "s")
+    '''
+
+    t1 = time.clock()
+    glouton_ssf = glouton_slide_show()
+    t2 = time.clock()
+    write_slide_show(glouton_ssf, "output_glouton_fast.txt")
+    print(glouton_ssf)
+    print('Score glouton fast : ' + str(calc_score(glouton_ssf)) + " en " + str(t2-t1) + "s")
+
+    new_ss = descente_stochastique(glouton_ssf, 1000)
     print("Score Stochastique : " + str(calc_score(new_ss)) + "\nListe Stochastique" + str(new_ss))
