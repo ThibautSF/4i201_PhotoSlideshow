@@ -12,6 +12,7 @@ import random
 import collections
 import copy
 import time
+import constraint as cs
 
 # Photos dicts : key,value → photoID,Photo
 allPhotos = collections.OrderedDict()
@@ -272,12 +273,71 @@ def descente_stochastique(slide_show, taille):
     return slide_show
 
 
+def plne_slide_show(lst_slides):
+    # Get all slide couple
+    problem = cs.Problem()
+    indices_lst = range(len(lst_slides))
+    problem.addVariables(["i","j"], indices_lst)
+    problem.addConstraint(cs.AllDifferentConstraint())
+    couples = problem.getSolutions()
+
+    # Prepare slideshow problem
+    plne = cs.Problem()
+    transition_out_i = dict()  # Toutes variables X(i,j) rassemblées par i (pour contrainte 1 slide après)
+    transition_in_j = dict()  # Toutes variables X(i,j) rassemblées par j (pour contrainte 1 slide avant)
+
+    transition_cycle = dict() # Toutes variables X1(i,j) X2(j,i) rassemblées par i-j
+
+    for one_couple in couples:
+        i = one_couple["i"]
+        j = one_couple["j"]
+
+        var_s_name = "S_"+str(i)+"_"+str(j)
+        var_x_name = "X_"+str(i)+"_"+str(j)
+
+        # Variable S(i,j) → score transition de slide position i à position j
+        plne.addVariable(var_s_name, [score_transition(lst_slides[i],lst_slides[j])])
+
+        # Variable X(i,j) → 1 si slide i et j se suivent / 0 sinon
+        plne.addVariable(var_x_name, [0, 1])
+
+        if i not in transition_out_i:
+            transition_out_i[i] = set()
+        transition_out_i[i].add(var_x_name)
+
+        if j not in transition_in_j:
+            transition_in_j[j] = set()
+        transition_in_j[j].add(var_x_name)
+
+        t_name = str(i)+"-"+str(j)
+        tinv_name = str(j)+"-"+str(i)  # Pour pas qu'il y ait de doublon
+        if t_name not in transition_cycle and tinv_name not in transition_cycle:
+            transition_cycle[t_name] = set()
+            transition_cycle[t_name].add(var_x_name)
+            transition_cycle[t_name].add("X_"+str(j)+"_"+str(i))
+
+
+    # Contraintes une seule slide après i
+    for i in transition_out_i:
+        plne.addConstraint(cs.ExactSumConstraint(1), transition_out_i[i])
+
+    # Contraintes une seule slide avant j
+    for j in transition_out_i:
+        plne.addConstraint(cs.ExactSumConstraint(1), transition_in_j[j])
+
+    # Contraintes pas d'allers retours
+    for transition in transition_cycle:
+        plne.addConstraint(cs.MaxSumConstraint(1), transition_cycle[transition])
+
+    # print(plne.getSolutions())
+
+
 if __name__ == '__main__':
     debug = True
 
     # read_instance_file("ressources/a_example.txt",100)
     # read_instance_file("ressources/b_lovely_landscapes.txt", 1)
-    read_instance_file("ressources/c_memorable_moments.txt", 100)
+    read_instance_file("ressources/c_memorable_moments.txt", 1)
 
     if debug:
         print('Datas :')
@@ -302,6 +362,7 @@ if __name__ == '__main__':
     print('Score glouton : ' + str(calc_score(glouton_ss)) + " en " + str(t2-t1) + "s")
     '''
 
+    '''
     t1 = time.clock()
     glouton_ssf = glouton_slide_show()
     t2 = time.clock()
@@ -311,3 +372,8 @@ if __name__ == '__main__':
 
     new_ss = descente_stochastique(glouton_ssf, 1000)
     print("Score Stochastique : " + str(calc_score(new_ss)) + "\nListe Stochastique" + str(new_ss))
+    '''
+
+    slides = list(hPhotos.keys())
+    print(slides)
+    plne_slide_show(slides)
