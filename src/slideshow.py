@@ -13,6 +13,7 @@ import collections
 import copy
 import time
 import constraint as cs
+import pulp as plp
 
 # Photos dicts : key,value → photoID,Photo
 allPhotos = collections.OrderedDict()
@@ -281,6 +282,7 @@ def plne_slide_show(lst_slides):
     problem.addConstraint(cs.AllDifferentConstraint())
     couples = problem.getSolutions()
 
+    # TODO use pulp now...
     # Prepare slideshow problem
     plne = cs.Problem()
     transition_out_i = dict()  # Toutes variables X(i,j) rassemblées par i (pour contrainte 1 slide après)
