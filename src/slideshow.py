@@ -246,7 +246,7 @@ def descente_stochastique(slide_show, taille):
             slide_show_res[index2][0] = first_image[0]
 
         ancienne_transition = 0
-        if index1 < len(slide_show) - 1: # Vérifie si index1 est le dernier élément de la liste
+        if index1 < len(slide_show) - 1:  # Vérifie si index1 est le dernier élément de la liste
             ancienne_transition += score_transition(slide_show[index1], slide_show[index1 + 1])
         if index1 > 0:
             ancienne_transition += score_transition(slide_show[index1], slide_show[index1 - 1])
@@ -284,7 +284,13 @@ def plne_slide_show(lst_slides):
 
     # TODO use pulp now...
     # Prepare slideshow problem
-    plne = cs.Problem()
+    # plne = cs.Problem()
+    model = plp.LpProblem(name="Slideshow")
+
+    k_vals = range(1, len(lst_slides))
+    s_vals = list()  # Toutes constantes S(i,j) → score transition i à j
+    x_vars = list()  # Toutes variables X(i,j) → 1 si slide i et j se suivent / 0 sinon
+    z_vars = dict()  # Toutes les variables Z(i,j,k) rassemblées par k,i,j
     transition_out_i = dict()  # Toutes variables X(i,j) rassemblées par i (pour contrainte 1 slide après)
     transition_in_j = dict()  # Toutes variables X(i,j) rassemblées par j (pour contrainte 1 slide avant)
 
@@ -294,42 +300,138 @@ def plne_slide_show(lst_slides):
         i = one_couple["i"]
         j = one_couple["j"]
 
-        var_s_name = "S_"+str(i)+"_"+str(j)
-        var_x_name = "X_"+str(i)+"_"+str(j)
+        var_s_name = "S_{}_{}".format(i, j)
+        var_x_name = "X_{}_{}".format(i, j)
 
-        # Variable S(i,j) → score transition de slide position i à position j
-        plne.addVariable(var_s_name, [score_transition(lst_slides[i],lst_slides[j])])
+        # Constante S(i,j) → score transition de slide position i à position j
+        # plne.addVariable(var_s_name, [score_transition(lst_slides[i],lst_slides[j])])
+        score = score_transition(lst_slides[i],lst_slides[j])
+        # s_var = plp.LpVariable(cat=plp.LpInteger, name=var_s_name, lowBound=score, upBound=score)
+        s_vals.append(score)
 
         # Variable X(i,j) → 1 si slide i et j se suivent / 0 sinon
-        plne.addVariable(var_x_name, [0, 1])
+        # plne.addVariable(var_x_name, [0, 1])
+        x_var = plp.LpVariable(cat=plp.LpBinary, name=var_x_name)
+        x_vars.append(x_var)
+
+        for k in k_vals:
+            var_z_name = "Z_{}_{}_{}".format(i, j, k)
+            z_var = plp.LpVariable(cat=plp.LpContinuous, name=var_z_name, lowBound=0)
+
+            if k not in z_vars:
+                z_vars[k] = dict()
+            if i not in z_vars[k]:
+                z_vars[k][i] = dict()
+
+            z_vars[k][i][j] = z_var
 
         if i not in transition_out_i:
             transition_out_i[i] = set()
-        transition_out_i[i].add(var_x_name)
+        # transition_out_i[i].add(var_x_name)
+        transition_out_i[i].add(x_var)
 
         if j not in transition_in_j:
             transition_in_j[j] = set()
-        transition_in_j[j].add(var_x_name)
+        # transition_in_j[j].add(var_x_name)
+        transition_in_j[j].add(x_var)
 
-        t_name = str(i)+"-"+str(j)
-        tinv_name = str(j)+"-"+str(i)  # Pour pas qu'il y ait de doublon
-        if t_name not in transition_cycle and tinv_name not in transition_cycle:
+        t_name = frozenset([i, j])  # Pour pas qu'il y ait de doublon
+        '''
+        if t_name not in transition_cycle:
             transition_cycle[t_name] = set()
             transition_cycle[t_name].add(var_x_name)
             transition_cycle[t_name].add("X_"+str(j)+"_"+str(i))
+        '''
 
+        if t_name not in transition_cycle:
+            transition_cycle[t_name] = set()
+        if t_name in transition_cycle:
+            transition_cycle[t_name].add(x_var)
 
     # Contraintes une seule slide après i
     for i in transition_out_i:
-        plne.addConstraint(cs.ExactSumConstraint(1), transition_out_i[i])
+        # plne.addConstraint(cs.ExactSumConstraint(1), transition_out_i[i])
+        c = plp.LpConstraint(e=plp.lpSum(var for var in transition_out_i[i]),
+                             sense=plp.LpConstraintEQ,
+                             rhs=1,
+                             name="constraint_after_{0}".format(i))
+        model.addConstraint(c)
 
     # Contraintes une seule slide avant j
     for j in transition_out_i:
-        plne.addConstraint(cs.ExactSumConstraint(1), transition_in_j[j])
+        # plne.addConstraint(cs.ExactSumConstraint(1), transition_in_j[j])
+        c = plp.LpConstraint(e=plp.lpSum(var for var in transition_in_j[j]),
+                             sense=plp.LpConstraintEQ,
+                             rhs=1,
+                             name="constraint_before_{0}".format(j))
+        model.addConstraint(c)
 
     # Contraintes pas d'allers retours
     for transition in transition_cycle:
-        plne.addConstraint(cs.MaxSumConstraint(1), transition_cycle[transition])
+        # plne.addConstraint(cs.MaxSumConstraint(1), transition_cycle[transition])
+        lst = list(transition)
+        c = plp.LpConstraint(e=plp.lpSum(var for var in transition_cycle[transition]),
+                             sense=plp.LpConstraintLE,
+                             rhs=1,
+                             name="constraint_cycle_{}-{}".format(lst[0], lst[1]))
+        model.addConstraint(c)
+
+    for k in k_vals:
+        # Contrainte : somme sur j privé de 1 de Z(1,j,k) = 1
+        c = plp.LpConstraint(e=plp.lpSum(z_vars[k][0][j] for j in z_vars[k][0]),
+                             sense=plp.LpConstraintEQ,
+                             rhs=1,
+                             name="constraint_z1_{0}".format(k))
+        model.addConstraint(c)
+
+        # Contraintes : somme sur j privé de {1 et i } de Z(i,j,k) = La somme sur j privé de {i} de Z(j,i,k) ( avec k
+        # != 1 et i différent de 1 et k) print("k="+str(k))
+        for i in z_vars[k]:
+            if i == 0 or i == k:
+                continue
+
+            # print("i="+str(i))
+            left_c = plp.lpSum(z_vars[k][i][j] for j in z_vars[k][i] if (j != 0 and j != i))
+            # print(left_c)
+            right_c = plp.lpSum(z_vars[k][j][i] for j in z_vars[k][i] if j != i)
+            # print(right_c)
+            c = left_c == right_c
+            model.addConstraint(c, "constraint_z({0},j,{1})_z(j,{0},{1})".format(i, k))
+            # print(c)
+
+        # Contrainte :somme de sur j privé de {1 et k} de (Z(k,j,k) + 1) = La somme sur j privé de k des Z(j,k,
+        # k) (avec toujours k != 1) print("k=" + str(k))
+        left_c = plp.lpSum(z_vars[k][k][j] + 1 for j in z_vars[k][k] if (j != 0 and j != k))
+        # print(left_c)
+        right_c = plp.lpSum(z_vars[k][j][k] for j in z_vars[k] if j != k)
+        # print(right_c)
+        c = left_c == right_c
+        model.addConstraint(c, "constraint__z({0},j,{0})_z(j,{0},{0})".format(k))
+        # print(c)
+
+    # Contraintes Z(i,j,k) + Z(j,i,k) <= X(i,j) + X(j,i)
+    for i in indices_lst:
+        for j in indices_lst:
+            if j == 0 or j == i:
+                continue
+            for k in k_vals:
+                left_c = plp.lpSum(z_vars[k][i][j] + z_vars[k][j][i])
+                transition = frozenset({i, j})
+                right_c = plp.lpSum(var for var in transition_cycle[transition])
+
+                c = left_c <= right_c
+                model.addConstraint(c, "constraint_zinfx_{}_{}_{}".format(i, j, k))
+
+    objective = plp.lpSum(s_vals[i] * x_vars[i] for i in range(len(s_vals)))
+    model.sense = plp.LpMaximize
+    model.setObjective(objective)
+
+    print(objective)
+    print(model.solve())
+    print(plp.LpStatus[model.status])
+    for variable in model.variables():
+        print("{} = {}".format(variable.name, variable.varValue))
+    print(plp.value(model.objective))
 
     # print(plne.getSolutions())
 
@@ -376,6 +478,6 @@ if __name__ == '__main__':
     print("Score Stochastique : " + str(calc_score(new_ss)) + "\nListe Stochastique" + str(new_ss))
     '''
 
-    slides = list(hPhotos.keys())
+    slides = simple_ss
     print(slides)
     plne_slide_show(slides)
