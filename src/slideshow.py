@@ -282,100 +282,126 @@ def plne_slide_show(lst_slides):
     problem.addConstraint(cs.AllDifferentConstraint())
     couples = problem.getSolutions()
 
-    # TODO use pulp now...
+    del problem
+
     # Prepare slideshow problem
-    # plne = cs.Problem()
     model = plp.LpProblem(name="Slideshow")
 
-    k_vals = range(1, len(lst_slides))
-    s_vals = list()  # Toutes constantes S(i,j) → score transition i à j
-    x_vars = list()  # Toutes variables X(i,j) → 1 si slide i et j se suivent / 0 sinon
-    z_vars = dict()  # Toutes les variables Z(i,j,k) rassemblées par k,i,j
+    # k_vals = range(1, len(lst_slides))
+    v = len(indices_lst)-1
+    s_vals = dict()  # Toutes constantes S(i,j) → score transition i à j
+    x_vars = dict()  # Toutes variables X(i,j) → 1 si slide i et j se suivent / 0 sinon
+    z_vars = dict()  # Toutes les variables Z(i,j) rassemblées par i,j
     transition_out_i = dict()  # Toutes variables X(i,j) rassemblées par i (pour contrainte 1 slide après)
     transition_in_j = dict()  # Toutes variables X(i,j) rassemblées par j (pour contrainte 1 slide avant)
 
     transition_cycle = dict() # Toutes variables X1(i,j) X2(j,i) rassemblées par i-j
 
+    t1 = time.clock()
     for one_couple in couples:
         i = one_couple["i"]
         j = one_couple["j"]
 
         var_s_name = "S_{}_{}".format(i, j)
         var_x_name = "X_{}_{}".format(i, j)
+        var_z_name = "Z_{}_{}".format(i, j)
+        t_name = frozenset({i, j})  # Pour pas qu'il y ait de doublon
 
         # Constante S(i,j) → score transition de slide position i à position j
-        # plne.addVariable(var_s_name, [score_transition(lst_slides[i],lst_slides[j])])
-        score = score_transition(lst_slides[i],lst_slides[j])
-        # s_var = plp.LpVariable(cat=plp.LpInteger, name=var_s_name, lowBound=score, upBound=score)
-        s_vals.append(score)
+        if t_name not in s_vals:
+            s_vals[t_name] = score_transition(lst_slides[i],lst_slides[j])
 
         # Variable X(i,j) → 1 si slide i et j se suivent / 0 sinon
-        # plne.addVariable(var_x_name, [0, 1])
         x_var = plp.LpVariable(cat=plp.LpBinary, name=var_x_name)
-        x_vars.append(x_var)
+        #x_var = plp.LpVariable(cat=plp.LpContinuous, name=var_x_name, lowBound=0, upBound=1)
+        if i not in x_vars:
+            x_vars[i] = dict()
+        x_vars[i][j] = x_var
 
-        for k in k_vals:
-            var_z_name = "Z_{}_{}_{}".format(i, j, k)
-            z_var = plp.LpVariable(cat=plp.LpContinuous, name=var_z_name, lowBound=0)
-
-            if k not in z_vars:
-                z_vars[k] = dict()
-            if i not in z_vars[k]:
-                z_vars[k][i] = dict()
-
-            z_vars[k][i][j] = z_var
+        z_var = plp.LpVariable(cat=plp.LpContinuous, name=var_z_name, lowBound=0)
+        if i not in z_vars:
+            z_vars[i] = dict()
+        z_vars[i][j] = z_var
 
         if i not in transition_out_i:
             transition_out_i[i] = set()
-        # transition_out_i[i].add(var_x_name)
+
         transition_out_i[i].add(x_var)
+        if len(transition_out_i[i]) == v:
+            c = plp.LpConstraint(e=plp.lpSum(var for var in transition_out_i[i]),
+                                 sense=plp.LpConstraintEQ,
+                                 rhs=1,
+                                 name="constraint_after_{0}".format(i))
+            model.addConstraint(c)
+            transition_out_i.pop(i)
 
         if j not in transition_in_j:
             transition_in_j[j] = set()
-        # transition_in_j[j].add(var_x_name)
+
         transition_in_j[j].add(x_var)
+        if len(transition_in_j[j]) == v:
+            c = plp.LpConstraint(e=plp.lpSum(var for var in transition_in_j[j]),
+                                 sense=plp.LpConstraintEQ,
+                                 rhs=1,
+                                 name="constraint_before_{0}".format(j))
+            model.addConstraint(c)
+            transition_in_j.pop(j)
 
-        t_name = frozenset([i, j])  # Pour pas qu'il y ait de doublon
-        '''
         if t_name not in transition_cycle:
             transition_cycle[t_name] = set()
-            transition_cycle[t_name].add(var_x_name)
-            transition_cycle[t_name].add("X_"+str(j)+"_"+str(i))
-        '''
+        transition_cycle[t_name].add(x_var)
+        if len(transition_cycle[t_name]) == 2:
+            c = plp.LpConstraint(e=plp.lpSum(var for var in transition_cycle[t_name]),
+                                 sense=plp.LpConstraintLE,
+                                 rhs=1,
+                                 name="constraint_cycle_{}-{}".format(i, j))
+            model.addConstraint(c)
 
-        if t_name not in transition_cycle:
-            transition_cycle[t_name] = set()
-        if t_name in transition_cycle:
-            transition_cycle[t_name].add(x_var)
+    t2 = time.clock()
 
-    # Contraintes une seule slide après i
-    for i in transition_out_i:
-        # plne.addConstraint(cs.ExactSumConstraint(1), transition_out_i[i])
-        c = plp.LpConstraint(e=plp.lpSum(var for var in transition_out_i[i]),
-                             sense=plp.LpConstraintEQ,
-                             rhs=1,
-                             name="constraint_after_{0}".format(i))
-        model.addConstraint(c)
+    print("Var computing in : "+str(t2-t1)+"s")
 
-    # Contraintes une seule slide avant j
-    for j in transition_out_i:
-        # plne.addConstraint(cs.ExactSumConstraint(1), transition_in_j[j])
-        c = plp.LpConstraint(e=plp.lpSum(var for var in transition_in_j[j]),
-                             sense=plp.LpConstraintEQ,
-                             rhs=1,
-                             name="constraint_before_{0}".format(j))
-        model.addConstraint(c)
+    t1 = time.clock()
+    # Contrainte : somme sur j privé de 1 de Z(1,j) = |V|-1
+    c = plp.LpConstraint(e=plp.lpSum(z_vars[0][j] for j in z_vars[0]),
+                         sense=plp.LpConstraintEQ,
+                         rhs=v,
+                         name="constraint_z1")
+    model.addConstraint(c)
 
-    # Contraintes pas d'allers retours
-    for transition in transition_cycle:
-        # plne.addConstraint(cs.MaxSumConstraint(1), transition_cycle[transition])
-        lst = list(transition)
-        c = plp.LpConstraint(e=plp.lpSum(var for var in transition_cycle[transition]),
-                             sense=plp.LpConstraintLE,
-                             rhs=1,
-                             name="constraint_cycle_{}-{}".format(lst[0], lst[1]))
-        model.addConstraint(c)
+    # Contraintes : somme sur j privé de {1 et i } de Z(i,j,k) = La somme sur j privé de {i} de Z(j,i,k) ( avec k
+    # != 1 et i différent de 1 et k) print("k="+str(k))
+    for i in z_vars:
+        if i == 0:
+            continue
 
+        # print("i="+str(i))
+        left_c = plp.lpSum(z_vars[i][j] for j in z_vars[i] if (j != 0 and j != i)) + 1
+        # print(left_c)
+        right_c = plp.lpSum(z_vars[j][i] for j in z_vars[i] if j != i)
+        # print(right_c)
+        c = left_c == right_c
+        model.addConstraint(c, "constraint_z({0},j)_z(j,{0})".format(i))
+        # print(str(left_c) + " == " + str(right_c))
+
+    # Contraintes Z(i,j) + Z(j,i) <= (|V|-1)(X(i,j) + X(j,i))
+    for i in indices_lst:
+        for j in indices_lst:
+            if j == 0 or j == i:
+                continue
+
+            left_c = z_vars[i][j] + z_vars[j][i]
+            transition = frozenset({i, j})
+            right_c = v * (plp.lpSum(var for var in transition_cycle[transition]))
+
+            c = left_c <= right_c
+            model.addConstraint(c, "constraint_zinfx_{}_{}".format(i, j))
+
+    t2 = time.clock()
+
+    print("Constraint computing in : " + str(t2 - t1) + "s")
+
+    '''
     for k in k_vals:
         # Contrainte : somme sur j privé de 1 de Z(1,j,k) = 1
         c = plp.LpConstraint(e=plp.lpSum(z_vars[k][0][j] for j in z_vars[k][0]),
@@ -408,7 +434,7 @@ def plne_slide_show(lst_slides):
         c = left_c == right_c
         model.addConstraint(c, "constraint__z({0},j,{0})_z(j,{0},{0})".format(k))
         # print(c)
-
+    
     # Contraintes Z(i,j,k) + Z(j,i,k) <= X(i,j) + X(j,i)
     for i in indices_lst:
         for j in indices_lst:
@@ -421,17 +447,65 @@ def plne_slide_show(lst_slides):
 
                 c = left_c <= right_c
                 model.addConstraint(c, "constraint_zinfx_{}_{}_{}".format(i, j, k))
+    '''
 
-    objective = plp.lpSum(s_vals[i] * x_vars[i] for i in range(len(s_vals)))
-    model.sense = plp.LpMaximize
+    t1 = time.clock()
+    objective = plp.lpSum((-s_vals[frozenset({i, j})] * x_vars[i][j] for j in x_vars[i]) for i in x_vars)
+    model.sense = plp.LpMinimize
     model.setObjective(objective)
+    t2 = time.clock()
+    print("Objective computing in : " + str(t2 - t1) + "s")
 
-    print(objective)
-    print(model.solve())
-    print(plp.LpStatus[model.status])
+    t1 = time.clock()
+    model.solve()
+    # model.solve(plp.GLPK())
+    t2 = time.clock()
+    print("Problem computing in : " + str(t2 - t1) + "s")
+
+    cycle_solution = dict()
     for variable in model.variables():
-        print("{} = {}".format(variable.name, variable.varValue))
-    print(plp.value(model.objective))
+        if variable.varValue > 0 and 'X' in variable.name:
+            # print("{} = {}".format(variable.name, variable.varValue))
+            lst = variable.name.split("_")
+            i = int(lst[1])
+            j = int(lst[2])
+            score = s_vals[frozenset({i, j})]
+
+            if i not in cycle_solution:
+                cycle_solution[i] = (j, variable.varValue, score)
+            else:
+                if variable.varValue > cycle_solution[i][1]:
+                    cycle_solution[i] = (j, variable.varValue, score)
+
+    # print(cycle_solution)
+
+    score_cycle = 0
+    min_score = -1
+    worst_transition = None
+    for i in cycle_solution:
+        j = cycle_solution[i][0]
+        score = cycle_solution[i][2]
+
+        score_cycle += score
+
+        if min_score == -1 or score < min_score:
+            min_score = score
+            worst_transition = (i, j)
+
+    print("Score plne = {0} / Score cycle = {1}".format(plp.value(model.objective), score_cycle))
+    print("Transition du cycle à briser {0} de score {1}".format(worst_transition, min_score))
+
+    # TODO
+    # interprete solution → slideid in cycle_solution from worst_transition[1] to worst_transition[0]
+    # slideid is slide pos in lst_slides
+    slide_show_sol = list()
+    i = worst_transition[1]
+    while i != worst_transition[0]:
+        slide_show_sol.append(lst_slides[i])
+        i = cycle_solution[i][0]
+    slide_show_sol.append(lst_slides[i])
+
+    print(slide_show_sol)
 
     # print(plne.getSolutions())
 
@@ -441,7 +515,7 @@ if __name__ == '__main__':
 
     # read_instance_file("ressources/a_example.txt",100)
     # read_instance_file("ressources/b_lovely_landscapes.txt", 1)
-    read_instance_file("ressources/c_memorable_moments.txt", 1)
+    read_instance_file("ressources/c_memorable_moments.txt", 5)
 
     if debug:
         print('Datas :')
