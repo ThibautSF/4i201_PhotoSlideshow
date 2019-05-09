@@ -500,16 +500,8 @@ def plne_problem(lst_slides, couples):
 
 def heuristique_arrondi(photo,hphoto,vphoto):
 
-    liste_base = []
-    for image_id in hPhotos:
-        liste_base.append([image_id])
+    liste_base = compute_slides()
 
-    v_lst = []
-    for image_id in vPhotos:
-        v_lst.append(image_id)
-        if len(v_lst) >= 2:
-            liste_base.append(v_lst)
-            v_lst = []
 
     y = {}
 
