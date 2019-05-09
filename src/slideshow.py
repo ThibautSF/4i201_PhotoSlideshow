@@ -15,6 +15,20 @@ import time
 import constraint as cs
 import pulp as plp
 
+use_simple = True
+use_glouton = False
+use_glouton_fast = False
+use_stochastique = False
+nb_stochastique = 1000
+use_plne = False
+use_arrondi = True
+
+#filename = "ressources/a_example.txt"; p = 100
+#filename = "ressources/b_lovely_landscapes.txt"; p = 1
+filename = "ressources/c_memorable_moments.txt"; p = 100
+#filename = "ressources/d_pet_pictures.txt"; p = 5
+#filename = "ressources/e_shiny_selfies.txt"; p = 5
+
 # Photos dicts : key,value → photoID,Photo
 allPhotos = collections.OrderedDict()
 hPhotos = collections.OrderedDict()
@@ -498,11 +512,7 @@ def plne_problem(lst_slides, couples):
     return model, s_vals
 
 
-def heuristique_arrondi(photo,hphoto,vphoto):
-
-    liste_base = compute_slides()
-
-
+def heuristique_arrondi(liste_base):
     y = {}
 
     for i in range(len(liste_base)-1):
@@ -561,7 +571,7 @@ def heuristique_arrondi(photo,hphoto,vphoto):
             else:
                 liste_couple_interdit.append(i[0])
             liste_couple_select.append(i[0])
-        if len(liste_nb_pris) == len(photo) - 2:
+        if len(liste_nb_pris) == len(allPhotos) - 2:
             break
 
     slide_show = []
@@ -589,11 +599,9 @@ def heuristique_arrondi(photo,hphoto,vphoto):
 
 
 if __name__ == '__main__':
-    debug = True
+    debug = False
 
-    # read_instance_file("ressources/a_example.txt",100)
-    # read_instance_file("ressources/b_lovely_landscapes.txt", 1)
-    read_instance_file("ressources/c_memorable_moments.txt", 5)
+    read_instance_file(filename, p)
 
     if debug:
         print('Datas :')
@@ -602,41 +610,106 @@ if __name__ == '__main__':
         print(vPhotos)
         print('')
 
-    simple_ss = simple_slide_show()
-    write_slide_show(simple_ss)
-    print(simple_ss)
-    print('Score simple : ' + str(calc_score(simple_ss)))
+    statlines = []
 
-    print()
+    score2 = 0
 
-    t1 = time.clock()
-    glouton_ss = glouton_slide_show(False)
-    t2 = time.clock()
-    write_slide_show(glouton_ss, "output_glouton.txt")
-    print(glouton_ss)
-    print('Score glouton : ' + str(calc_score(glouton_ss)) + " en " + str(t2-t1) + "s")
+    if use_simple:
+        t1 = time.clock()
+        simple_ss = simple_slide_show()
+        t2 = time.clock()
+        write_slide_show(simple_ss)
+        print(simple_ss)
+        tps = t2-t1
+        score = calc_score(simple_ss)
+        print('Score simple : ' + str(score) + " en " + str(t2-t1) + "s")
 
-    t1 = time.clock()
-    glouton_ssf = glouton_slide_show()
-    t2 = time.clock()
-    write_slide_show(glouton_ssf, "output_glouton_fast.txt")
-    print(glouton_ssf)
-    print('Score glouton fast : ' + str(calc_score(glouton_ssf)) + " en " + str(t2 - t1) + "s")
+        if use_stochastique:
+            t1 = time.clock()
+            new_ss = descente_stochastique(simple_ss, nb_stochastique)
+            t2 = time.clock()
+            score2 = calc_score(new_ss)
+            print("Score Stochastique : " + str(score2) + " en " + str(tps+t2-t1) + "s")
 
-    new_ss = descente_stochastique(glouton_ssf, 1000)
-    print("Score Stochastique : " + str(calc_score(new_ss)) + "\nListe Stochastique" + str(new_ss))
+        statlines.append("{0:.2f}\t{1}\t{2:.2f}\t{3}".format(tps,score,tps+t2-t1,score2).replace(".",","))
 
-    slides = simple_ss
-    t1 = time.clock()
-    plne_ss = plne_slide_show(slides)
-    t2 = time.clock()
-    write_slide_show(plne_ss, "output_plne.txt")
-    print(plne_ss)
-    print('Score plne : ' + str(calc_score(plne_ss)) + " en " + str(t2 - t1) + "s")
+    if use_glouton:
+        t1 = time.clock()
+        glouton_ss = glouton_slide_show(False)
+        t2 = time.clock()
+        write_slide_show(glouton_ss, "output_glouton.txt")
+        print(glouton_ss)
+        tps = t2 - t1
+        score = calc_score(glouton_ss)
+        print('Score glouton : ' + str(score) + " en " + str(t2-t1) + "s")
 
-    t1 = time.clock()
-    arrondi_ss = heuristique_arrondi(allPhotos, hPhotos, vPhotos)
-    t2 = time.clock()
-    write_slide_show(arrondi_ss, "output_arrondi.txt")
-    print(arrondi_ss)
-    print('Score arrondi : ' + str(calc_score(arrondi_ss)) + " en " + str(t2 - t1) + "s")
+        if use_stochastique:
+            t1 = time.clock()
+            new_ss = descente_stochastique(glouton_ss, nb_stochastique)
+            t2 = time.clock()
+            score2 = calc_score(new_ss)
+            print("Score Stochastique : " + str(score2) + " en " + str(tps+t2-t1) + "s")
+
+        statlines.append("{0:.2f}\t{1}\t{2:.2f}\t{3}".format(tps,score,tps+t2-t1,score2).replace(".",","))
+
+    if use_glouton_fast:
+        t1 = time.clock()
+        glouton_ssf = glouton_slide_show()
+        t2 = time.clock()
+        write_slide_show(glouton_ssf, "output_glouton_fast.txt")
+        print(glouton_ssf)
+        tps = t2 - t1
+        score = calc_score(glouton_ssf)
+        print('Score glouton fast : ' + str(score) + " en " + str(t2-t1) + "s")
+
+        if use_stochastique:
+            t1 = time.clock()
+            new_ss = descente_stochastique(glouton_ssf, nb_stochastique)
+            t2 = time.clock()
+            score2 = calc_score(new_ss)
+            print("Score Stochastique : " + str(score2) + " en " + str(tps+t2-t1) + "s")
+
+        statlines.append("{0:.2f}\t{1}\t{2:.2f}\t{3}".format(tps,score,tps+t2-t1,score2).replace(".",","))
+
+    slides = compute_slides()
+
+    if use_plne:
+        t1 = time.clock()
+        plne_ss = plne_slide_show(slides)
+        t2 = time.clock()
+        write_slide_show(plne_ss, "output_plne.txt")
+        print(plne_ss)
+        tps = t2 - t1
+        score = calc_score(plne_ss)
+        print('Score plne : ' + str(score) + " en " + str(t2-t1) + "s")
+
+        if use_stochastique:
+            t1 = time.clock()
+            new_ss = descente_stochastique(plne_ss, nb_stochastique)
+            t2 = time.clock()
+            score2 = calc_score(new_ss)
+            print("Score Stochastique : " + str(score2) + " en " + str(tps+t2-t1) + "s")
+
+        statlines.append("{0:.2f}\t{1}\t{2:.2f}\t{3}".format(tps,score,tps+t2-t1,score2).replace(".",","))
+
+    if use_arrondi:
+        t1 = time.clock()
+        arrondi_ss = heuristique_arrondi(slides)
+        t2 = time.clock()
+        write_slide_show(arrondi_ss, "output_arrondi.txt")
+        print(arrondi_ss)
+        tps = t2 - t1
+        score = calc_score(arrondi_ss)
+        print('Score arrondi : ' + str(score) + " en " + str(t2-t1) + "s")
+
+        if use_stochastique:
+            t1 = time.clock()
+            new_ss = descente_stochastique(arrondi_ss, nb_stochastique)
+            t2 = time.clock()
+            score2 = calc_score(new_ss)
+            print("Score Stochastique : " + str(score2) + " en " + str(tps+t2-t1) + "s")
+
+        statlines.append("{0:.2f}\t{1}\t{2:.2f}\t{3}".format(tps,score,tps+t2-t1,score2).replace(".",","))
+
+        for line in statlines:
+            print(line)
