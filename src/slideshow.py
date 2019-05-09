@@ -546,8 +546,8 @@ def heuristique_arrondi(photo):
                 true_slide_show.append(liste_index_photo[int(slide_show[len(slide_show)-1][0])])
                 liste_couple_select.pop(i)
                 break
-    print("Le slide show obtenu : " + str(true_slide_show))
-    print("Le score de ce slide show : " + str(calc_score(true_slide_show)))
+    # print("Le slide show obtenu : " + str(true_slide_show))
+    # print("Le score de ce slide show : " + str(calc_score(true_slide_show)))
     return true_slide_show
 
 
