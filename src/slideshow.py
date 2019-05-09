@@ -468,14 +468,27 @@ def plne_problem(lst_slides, couples):
     return model, s_vals
 
 
-def heuristique_arrondi(photo):
+def heuristique_arrondi(photo,hphoto,vphoto):
+
+    liste_base = []
+    for image_id in hPhotos:
+        liste_base.append([image_id])
+
+    v_lst = []
+    for image_id in vPhotos:
+        v_lst.append(image_id)
+        if len(v_lst) >= 2:
+            liste_base.append(v_lst)
+            v_lst = []
+
     y = {}
-    liste_index_photo = list(photo.keys())
-    for i in range(len(photo)-1):
-        for j in range(i+1, len(photo)):
-            y[str(i)+";"+str(j)] = score_transition(liste_index_photo[i], liste_index_photo[j])#photo[i][0], photo[j][0])
+
+    for i in range(len(liste_base)-1):
+        for j in range(i+1, len(liste_base)):
+            y[str(i) + ";" + str(j)] = score_transition(liste_base[i],liste_base[j])
     y = sorted(y.items(), key=lambda t: t[1])
     y.reverse()
+
     liste_couple_interdit = []
     liste_nb_pris=[]
     liste_couple_select = []
@@ -533,17 +546,19 @@ def heuristique_arrondi(photo):
     true_slide_show =[]
     compare = range(len(liste_nb_pris)+1)
     slide_show.append([(list(set(compare) - set(liste_nb_pris)))[0]])
-    true_slide_show.append(liste_index_photo[(list(set(compare) - set(liste_nb_pris)))[0]])
+    true_slide_show.append(liste_base[(list(set(compare) - set(liste_nb_pris)))[0]])
     while len(liste_couple_select) != 0:
         for i in range(len(liste_couple_select)):
-            if liste_couple_select[i][0:liste_couple_select[i].find(';')] == str(slide_show[len(slide_show)-1][0]):
-                slide_show.append([liste_couple_select[i][liste_couple_select[i].find(';')+1:len(liste_couple_select[i])]])
-                true_slide_show.append(liste_index_photo[int(slide_show[len(slide_show)-1][0])])
+            if liste_couple_select[i][0:liste_couple_select[i].find(';')] == str(slide_show[len(slide_show) - 1][0]):
+                slide_show.append(
+                    [liste_couple_select[i][liste_couple_select[i].find(';') + 1:len(liste_couple_select[i])]])
+                true_slide_show.append(liste_base[int(slide_show[len(slide_show) - 1][0])])
                 liste_couple_select.pop(i)
                 break
-            elif liste_couple_select[i][liste_couple_select[i].find(';')+1:len(liste_couple_select[i])] == str(slide_show[len(slide_show)-1][0]):
+            elif liste_couple_select[i][liste_couple_select[i].find(';') + 1:len(liste_couple_select[i])] == str(
+                    slide_show[len(slide_show) - 1][0]):
                 slide_show.append([liste_couple_select[i][0:liste_couple_select[i].find(';')]])
-                true_slide_show.append(liste_index_photo[int(slide_show[len(slide_show)-1][0])])
+                true_slide_show.append(liste_base[int(slide_show[len(slide_show) - 1][0])])
                 liste_couple_select.pop(i)
                 break
     # print("Le slide show obtenu : " + str(true_slide_show))
@@ -598,7 +613,7 @@ if __name__ == '__main__':
     print('Score plne : ' + str(calc_score(plne_ss)) + " en " + str(t2 - t1) + "s")
 
     t1 = time.clock()
-    arrondi_ss = heuristique_arrondi(allPhotos)
+    arrondi_ss = heuristique_arrondi(allPhotos,hPhotos,vPhotos)
     t2 = time.clock()
     write_slide_show(arrondi_ss, "output_arrondi.txt")
     print(arrondi_ss)
