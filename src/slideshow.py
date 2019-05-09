@@ -643,7 +643,7 @@ if __name__ == '__main__':
     print('Score plne : ' + str(calc_score(plne_ss)) + " en " + str(t2 - t1) + "s")
 
     t1 = time.clock()
-    arrondi_ss = heuristique_arrondi(allPhotos,hPhotos,vPhotos)
+    arrondi_ss = heuristique_arrondi(allPhotos, hPhotos, vPhotos)
     t2 = time.clock()
     write_slide_show(arrondi_ss, "output_arrondi.txt")
     print(arrondi_ss)
