@@ -111,6 +111,36 @@ def score_transition(slide_a, slide_b):
     return score
 
 
+def compute_slides():
+    slides = []  # list of lists (one element if H / two elements if V)
+
+    for image_id in hPhotos:
+        slides.append([image_id])
+
+    lst_v_keys = list(vPhotos.keys())
+    while len(lst_v_keys) > 1:
+        image1 = lst_v_keys[0]
+        lst_v_keys.remove(image1)
+        words = set()
+        words |= allPhotos[image1].keyWords
+
+        best_image = lst_v_keys[0]
+        best_size = len(words | allPhotos[best_image].keyWords)
+        j = 1
+        while j < len(lst_v_keys):
+            image = lst_v_keys[j]
+            words2 = words | allPhotos[image].keyWords
+            if len(words2) > best_size:
+                best_image = image
+                best_size = len(words2)
+            j += 1
+
+        slides.append([image1, best_image])
+        lst_v_keys.remove(best_image)
+
+    return slides
+
+
 def glouton_slide_show(isfast=True):
     slide_show = []  # list of lists (one element if H / two elements if V)
     loc_h_photos = hPhotos.copy()
